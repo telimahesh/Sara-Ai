@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "A single message in a conversation with Sara.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "isModel": {
+          "type": "boolean",
+          "description": "True if the message is from Sara, false if from the user."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the message was sent."
+        },
+        "uid": {
+          "type": "string",
+          "description": "The UID of the user who owns this message."
+        }
+      },
+      "required": ["text", "isModel", "timestamp", "uid"]
+    },
+    "VoiceProfile": {
+      "title": "VoiceProfile",
+      "description": "A customizable persona and voice configuration for Sara.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the profile (e.g., 'Sassy Sara', 'Professional Sara')."
+        },
+        "voiceName": {
+          "type": "string",
+          "description": "The Gemini Live voice ID."
+        },
+        "personality": {
+          "type": "string",
+          "description": "The system instruction defining personality and speech patterns."
+        },
+        "uid": {
+          "type": "string",
+          "description": "The UID of the user who owns this profile."
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this is the user's active profile."
+        }
+      },
+      "required": ["name", "voiceName", "personality", "uid"]
+    },
+    "UserVoiceEnrollment": {
+      "title": "UserVoiceEnrollment",
+      "description": "A record of the user's voice enrollment for recognition by Sara.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The UID of the user."
+        },
+        "enrolledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the voice was enrolled."
+        },
+        "voiceDescription": {
+          "type": "string",
+          "description": "A textual description of the user's voice (e.g., 'Deep male voice', 'Soft female voice')."
+        },
+        "isEnrolled": {
+          "type": "boolean",
+          "description": "Whether the voice enrollment is active."
+        }
+      },
+      "required": ["uid", "enrolledAt", "isEnrolled"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "User-specific conversation history."
+    },
+    "/users/{userId}/profiles/{profileId}": {
+      "schema": "VoiceProfile",
+      "description": "User-specific voice and personality profiles."
+    },
+    "/users/{userId}/voice_enrollment/default": {
+      "schema": "UserVoiceEnrollment",
+      "description": "The user's voice enrollment data."
+    }
+  }
+}

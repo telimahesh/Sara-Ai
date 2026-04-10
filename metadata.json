@@ -1,0 +1,11 @@
+{
+  "name": "Remix: Sara AI Assistant",
+  "description": "A sassy, witty, and flirty voice-to-voice AI assistant named Sara.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "display-capture",
+    "geolocation",
+    "notifications"
+  ]
+}
