@@ -16,7 +16,10 @@ import {
   Sparkles,
   Zap,
   Activity,
-  HardDrive
+  HardDrive,
+  Eye,
+  Layers,
+  Monitor
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";

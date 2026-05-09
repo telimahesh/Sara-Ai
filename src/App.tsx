@@ -90,6 +90,7 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isVoiceEnrolled, setIsVoiceEnrolled] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [hasFinishedOnboarding, setHasFinishedOnboarding] = useState<boolean>(() => {
     return localStorage.getItem("hasFinishedOnboarding") === "true";
@@ -200,6 +201,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
+      setIsLoading(false);
       
       // Auto-sign in as guest if no user is present
       if (!u && isAuthReady) {
@@ -542,6 +544,14 @@ export default function App() {
       default: return "Sleeping";
     }
   };
+
+  if (isLoading && !hasFinishedOnboarding) {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <Sparkles className="w-12 h-12 text-pink-500 animate-pulse" />
+      </div>
+    );
+  }
 
   if (showPrivacyPolicy) {
     return <PrivacyPolicy onBack={() => setShowPrivacyPolicy(false)} />;

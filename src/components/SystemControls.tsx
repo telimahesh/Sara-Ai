@@ -35,7 +35,8 @@ import {
   History,
   FileText,
   MousePointer2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";

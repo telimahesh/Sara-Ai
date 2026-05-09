@@ -7,7 +7,9 @@ import {
   ChevronLeft,
   Server,
   Cloud,
-  FileText
+  FileText,
+  Mic,
+  Monitor
 } from "lucide-react";
 import { Button } from "./ui/button";
 
