@@ -31,6 +31,8 @@ import { cn } from "@/lib/utils";
 import { AdminPanel } from "@/components/AdminPanel";
 import { SystemControls } from "./components/SystemControls";
 import { VoiceEnrollment } from "./components/VoiceEnrollment";
+import { Onboarding } from "./components/Onboarding";
+import { PrivacyPolicy } from "./components/PrivacyPolicy";
 import { auth, db, signIn, signOut, signInAsGuest, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { 
   collection, 
@@ -88,6 +90,10 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isVoiceEnrolled, setIsVoiceEnrolled] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [hasFinishedOnboarding, setHasFinishedOnboarding] = useState<boolean>(() => {
+    return localStorage.getItem("hasFinishedOnboarding") === "true";
+  });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const sessionRef = useRef<LiveSession | null>(null);
@@ -537,6 +543,21 @@ export default function App() {
     }
   };
 
+  if (showPrivacyPolicy) {
+    return <PrivacyPolicy onBack={() => setShowPrivacyPolicy(false)} />;
+  }
+
+  if (!hasFinishedOnboarding) {
+    return (
+      <Onboarding 
+        onComplete={() => {
+          localStorage.setItem("hasFinishedOnboarding", "true");
+          setHasFinishedOnboarding(true);
+        }} 
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-[#050505] text-white font-sans overflow-hidden flex flex-col items-center justify-center">
       {/* Background Glow */}
@@ -875,7 +896,8 @@ export default function App() {
               </div>
 
               {!isEditingProfile && (
-                <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl border border-white/5">
+                <>
+                  <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl border border-white/5">
                   <button
                     onClick={() => setSettingsTab("profiles")}
                     className={cn(
@@ -910,7 +932,15 @@ export default function App() {
                     Permissions
                   </button>
                 </div>
-              )}
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowPrivacyPolicy(true)}
+                  className="w-full h-8 text-[9px] uppercase tracking-[0.2em] text-zinc-600 hover:text-zinc-400 mb-4 font-bold"
+                >
+                  View Privacy Policy
+                </Button>
+              </>
+            )}
 
               <div className="flex-1 overflow-y-auto pr-2 scrollbar-hide">
                 <AnimatePresence mode="wait">

@@ -31,7 +31,11 @@ import {
   Keyboard,
   Battery,
   ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  History,
+  FileText,
+  MousePointer2,
+  Image as ImageIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
@@ -44,6 +48,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "./ui/button";
+
+import { UsageStats } from "./UsageStats";
+import { PermissionExplanation } from "./PermissionExplanation";
 
 interface PermissionItemProps {
   icon: React.ElementType;
@@ -94,6 +101,7 @@ export const SystemControls = () => {
   const [activeCategory, setActiveCategory] = useState<string>("communication");
   const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
   const [showDisplayCaptureModal, setShowDisplayCaptureModal] = useState(false);
+  const [showExplanation, setShowExplanation] = useState<any>(null);
   const [permissions, setPermissions] = useState<Record<string, any>>({
     microphone: "prompt",
     camera: "prompt",
@@ -215,6 +223,22 @@ export const SystemControls = () => {
       case "display_capture":
         setShowDisplayCaptureModal(true);
         break;
+      case "phone_state":
+        setErrorMessage("Opening Phone Settings... Please allow Epic Assistant to access phone state and numbers.");
+        window.location.href = "intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;data=package:com.saraai.assistant;end";
+        break;
+      case "battery":
+        setErrorMessage("Opening Battery Optimization Settings... Please set Epic Assistant to 'Don't Optimize'.");
+        window.location.href = "intent:#Intent;action=android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS;end";
+        break;
+      case "usage":
+        setErrorMessage("Opening Usage Access Settings... Please find Epic Assistant and enable it.");
+        window.location.href = "intent:#Intent;action=android.settings.USAGE_ACCESS_SETTINGS;end";
+        break;
+      case "overlay":
+        setErrorMessage("Opening Overlay Settings... Please allow Epic Assistant to display over other apps.");
+        window.location.href = "intent:#Intent;action=android.settings.action.MANAGE_OVERLAY_PERMISSION;end";
+        break;
     }
   };
 
@@ -234,7 +258,8 @@ export const SystemControls = () => {
     { id: "communication", label: "Communication", icon: Phone },
     { id: "media", label: "Media & Sensors", icon: Camera },
     { id: "system", label: "System & Core", icon: Smartphone },
-    { id: "connectivity", label: "Connectivity", icon: Wifi }
+    { id: "connectivity", label: "Connectivity", icon: Wifi },
+    { id: "analytics", label: "Analytics", icon: BarChart3 }
   ];
 
   const permissionGroups: Record<string, { icon: React.ElementType; title: string; desc: string; status: "allowed" | "denied" | "prompt" | "unsupported" | "restricted" }[]> = {
@@ -248,15 +273,19 @@ export const SystemControls = () => {
       { icon: MessageSquare, title: "RECEIVE_SMS", desc: "Monitor incoming text messages.", status: "restricted" },
       { icon: Calendar, title: "READ_CALENDAR", desc: "Access your calendar events.", status: "prompt" },
       { icon: Calendar, title: "WRITE_CALENDAR", desc: "Add or modify calendar events.", status: "restricted" },
+      { icon: Phone, title: "READ_PHONE_STATE", desc: "Detect incoming calls and network status.", status: "prompt" },
+      { icon: Phone, title: "READ_PHONE_NUMBERS", desc: "Identify your device phone number.", status: "prompt" },
+      { icon: History, title: "READ_CALL_LOG", desc: "View and manage your call history.", status: "prompt" },
     ],
     media: [
       { icon: Camera, title: "CAMERA", desc: "Take photos and record videos.", status: permissions.camera === "granted" ? "allowed" : "prompt" },
       { icon: Mic, title: "RECORD_AUDIO", desc: "Record audio through the microphone.", status: permissions.microphone === "granted" ? "allowed" : "prompt" },
       { icon: MapPin, title: "ACCESS_FINE_LOCATION", desc: "Access precise GPS location.", status: permissions.geolocation === "granted" ? "allowed" : "prompt" },
       { icon: MapPin, title: "ACCESS_COARSE_LOCATION", desc: "Access approximate network location.", status: permissions.geolocation === "granted" ? "allowed" : "prompt" },
+      { icon: MapPin, title: "ACCESS_BACKGROUND_LOCATION", desc: "Track location even when the app is closed.", status: "restricted" },
       { icon: HardDrive, title: "READ_EXTERNAL_STORAGE", desc: "Read files from your device storage.", status: "prompt" },
       { icon: HardDrive, title: "WRITE_EXTERNAL_STORAGE", desc: "Save files to your device storage.", status: "restricted" },
-      { icon: Eye, title: "READ_MEDIA_IMAGES", desc: "Access your photo gallery.", status: "prompt" },
+      { icon: ImageIcon, title: "READ_MEDIA_IMAGES", desc: "Access your photo gallery.", status: "prompt" },
       { icon: Monitor, title: "READ_MEDIA_VIDEO", desc: "Access your video library.", status: "prompt" },
       { icon: Volume2, title: "READ_MEDIA_AUDIO", desc: "Access your music and audio files.", status: "prompt" },
       { icon: ShieldCheck, title: "MANAGE_EXTERNAL_STORAGE", desc: "Full access to device storage.", status: "restricted" },
@@ -264,13 +293,13 @@ export const SystemControls = () => {
     system: [
       { icon: Lock, title: "WAKE_LOCK", desc: "Keep the screen active.", status: permissions.wakelock === "allowed" ? "allowed" : "prompt" },
       { icon: Bell, title: "POST_NOTIFICATIONS", desc: "Display alerts and notifications.", status: permissions.notifications === "granted" ? "allowed" : "prompt" },
-      { icon: Smartphone, title: "SYSTEM_ALERT_WINDOW", desc: "Draw over other applications.", status: "restricted" },
+      { icon: Layers, title: "SYSTEM_ALERT_WINDOW", desc: "Draw over other applications.", status: "prompt" },
       { icon: Monitor, title: "DISPLAY_CAPTURE", desc: "Allow Epic Assistant to see your screen for deep control and context.", status: "prompt" },
-      { icon: Activity, title: "PACKAGE_USAGE_STATS", desc: "Monitor app usage and statistics.", status: "restricted" },
+      { icon: Activity, title: "PACKAGE_USAGE_STATS", desc: "Monitor app usage and statistics.", status: "prompt" },
       { icon: Bell, title: "BIND_NOTIFICATION_LISTENER", desc: "Listen to all system notifications.", status: "restricted" },
       { icon: Accessibility, title: "BIND_ACCESSIBILITY_SERVICE", desc: "Unlock deep device control, app interaction, and hands-free automation.", status: "prompt" },
       { icon: Keyboard, title: "BIND_INPUT_METHOD", desc: "Custom keyboard integration.", status: "restricted" },
-      { icon: Battery, title: "IGNORE_BATTERY_OPTIMIZATIONS", desc: "Bypass power saving restrictions.", status: "restricted" },
+      { icon: Battery, title: "IGNORE_BATTERY_OPTIMIZATIONS", desc: "Bypass power saving restrictions.", status: "prompt" },
       { icon: ShieldCheck, title: "DEVICE_ADMIN", desc: "Device administration privileges.", status: "restricted" },
       { icon: Search, title: "QUERY_ALL_PACKAGES", desc: "See all installed applications.", status: "restricted" },
       { icon: Zap, title: "FOREGROUND_SERVICE", desc: "Run persistent background tasks.", status: "allowed" },
@@ -330,27 +359,69 @@ export const SystemControls = () => {
             exit={{ opacity: 0, y: -10 }}
             className="grid grid-cols-1 md:grid-cols-2 gap-3"
           >
-            {permissionGroups[activeCategory].map((perm, idx) => (
-              <PermissionItem 
-                key={idx}
-                icon={perm.icon}
-                title={perm.title}
-                description={perm.desc}
-                status={perm.status}
-                onToggle={() => {
-                  if (perm.title === "ACCESS_FINE_LOCATION") requestPermission("geolocation");
-                  if (perm.title === "POST_NOTIFICATIONS") requestPermission("notifications");
-                  if (perm.title === "WAKE_LOCK") requestPermission("wakelock");
-                  if (perm.title === "READ_CONTACTS") requestPermission("contacts");
-                  if (perm.title === "VIBRATE") requestPermission("vibration");
-                  if (perm.title === "BIND_ACCESSIBILITY_SERVICE") requestPermission("accessibility");
-                  if (perm.title === "DISPLAY_CAPTURE") requestPermission("display_capture");
-                }}
-              />
-            ))}
+            {activeCategory === "analytics" ? (
+              <div className="col-span-1 md:col-span-2">
+                <UsageStats />
+              </div>
+            ) : (
+              permissionGroups[activeCategory].map((perm, idx) => (
+                <PermissionItem 
+                  key={idx}
+                  icon={perm.icon}
+                  title={perm.title}
+                  description={perm.desc}
+                  status={perm.status}
+                  onToggle={() => {
+                    // Logic to show explanation first for sensitive ones
+                    const sensitive = {
+                      "READ_CONTACTS": { reason: "Epic needs your contacts so you can call and message them by name using voice commands.", benefits: ["Voice-commanded calling", "Direct messaging support", "Contact recognition"] },
+                      "ACCESS_FINE_LOCATION": { reason: "Precise location allows Epic to provide hyper-local weather, directions, and reminders.", benefits: ["Smart directions", "Local announcements", "Geo-fencing support"] },
+                      "BIND_ACCESSIBILITY_SERVICE": { reason: "Accessibility unlock hands-free interaction with other apps like WhatsApp and Instagram.", benefits: ["App automation", "Remote control", "Dictation support"] },
+                      "PACKAGE_USAGE_STATS": { reason: "Usage stats help Epic understand your digital habits and optimize its help.", benefits: ["App engagement tracking", "Screen time insights", "Behavioral optimization"] }
+                    };
+
+                    if (sensitive[perm.title as keyof typeof sensitive]) {
+                      setShowExplanation({
+                        title: perm.title,
+                        description: perm.desc,
+                        icon: perm.icon,
+                        ...sensitive[perm.title as keyof typeof sensitive],
+                        type: perm.title.toLowerCase().replace("read_", "").replace("access_", "").replace("bind_", "").replace("_service", "").replace("_stats", "")
+                      });
+                    } else {
+                      if (perm.title === "ACCESS_FINE_LOCATION") requestPermission("geolocation");
+                      if (perm.title === "POST_NOTIFICATIONS") requestPermission("notifications");
+                      if (perm.title === "WAKE_LOCK") requestPermission("wakelock");
+                      if (perm.title === "READ_CONTACTS") requestPermission("contacts");
+                      if (perm.title === "VIBRATE") requestPermission("vibration");
+                      if (perm.title === "BIND_ACCESSIBILITY_SERVICE") requestPermission("accessibility");
+                      if (perm.title === "DISPLAY_CAPTURE") requestPermission("display_capture");
+                      if (perm.title === "READ_PHONE_STATE") requestPermission("phone_state");
+                      if (perm.title === "IGNORE_BATTERY_OPTIMIZATIONS") requestPermission("battery");
+                      if (perm.title === "PACKAGE_USAGE_STATS") requestPermission("usage");
+                      if (perm.title === "SYSTEM_ALERT_WINDOW") requestPermission("overlay");
+                      if (["READ_CALENDAR", "READ_CALL_LOG", "READ_PHONE_NUMBERS", "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO", "READ_EXTERNAL_STORAGE"].includes(perm.title)) {
+                        setErrorMessage(`Requesting ${perm.title}... Please grant permission in the system dialog.`);
+                      }
+                    }
+                  }}
+                />
+              ))
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      <PermissionExplanation 
+        isOpen={!!showExplanation}
+        onClose={() => setShowExplanation(null)}
+        onGrant={() => {
+          const type = showExplanation.type;
+          setShowExplanation(null);
+          requestPermission(type === "contacts" ? "contacts" : type);
+        }}
+        {...showExplanation}
+      />
 
       {/* Accessibility Dialog */}
       <Dialog open={showAccessibilityModal} onOpenChange={setShowAccessibilityModal}>
