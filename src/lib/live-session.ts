@@ -37,9 +37,12 @@ export class LiveSession {
     this.setState("connecting");
 
     try {
+      // Check for microphone early to catch permission issues BEFORE connecting
+      await this.audioStreamer.checkPermissions();
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not set");
+        throw new Error("Sara's brain (API Key) is missing. If you built this APK yourself, please add the GEMINI_API_KEY to your project secrets.");
       }
       this.ai = new GoogleGenAI({ apiKey });
 
@@ -67,8 +70,14 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
         model: "gemini-3.1-flash-live-preview",
         callbacks: {
           onopen: async () => {
-            this.setState("connected");
-            await this.audioStreamer.start();
+            try {
+              this.setState("connected");
+              await this.audioStreamer.start();
+            } catch (error: any) {
+              console.error("Failed to start audio streamer:", error);
+              this.onError(error.message || "Failed to access microphone. Please check permissions.");
+              this.disconnect();
+            }
           },
           onmessage: async (message: LiveServerMessage) => {
             this.handleMessage(message);

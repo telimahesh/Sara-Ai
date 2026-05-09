@@ -14,17 +14,14 @@ export class AudioStreamer {
     this.onAudioData = onAudioData;
   }
 
-  async start() {
-    if (this.isRecording) return;
-
-    this.audioContext = new AudioContext({ sampleRate: 16000 });
+  async checkPermissions() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Microphone API is not supported in this environment. Please ensure you're using a secure connection.");
+    }
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // Stop immediately, just checking
     } catch (err: any) {
-      if (this.audioContext) {
-        this.audioContext.close();
-        this.audioContext = null;
-      }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         throw new Error("Microphone permission denied. Please allow microphone access in your Android settings.");
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
@@ -32,6 +29,18 @@ export class AudioStreamer {
       } else {
         throw new Error("Could not access microphone: " + (err.message || "Unknown error"));
       }
+    }
+  }
+
+  async start() {
+    if (this.isRecording) return;
+
+    this.audioContext = new AudioContext({ sampleRate: 16000 });
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err: any) {
+      // Re-use logic for consistency
+      throw await this.checkPermissions().catch(e => e);
     }
 
     if (!this.audioContext) return; // Handle case where stop() was called during getUserMedia
