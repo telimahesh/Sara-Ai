@@ -1,5 +1,5 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
-import { AudioStreamer } from "./audio-streamer";
+import { AudioStreamer } from "../lib/audio-streamer";
 
 export type SessionState = "disconnected" | "connecting" | "connected" | "listening" | "speaking";
 

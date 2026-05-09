@@ -26,7 +26,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LiveSession, SessionState } from "@/lib/live-session";
+import { LiveSession, SessionState } from "@/services/LiveSession";
 import { cn } from "@/lib/utils";
 import { AdminPanel } from "@/components/AdminPanel";
 import { SystemControls } from "./components/SystemControls";
@@ -50,6 +50,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 
+import { App as CapApp } from "@capacitor/app";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 
 interface Message {
@@ -137,6 +138,27 @@ export default function App() {
       setAdminClickCount(0);
     }
   };
+
+  useEffect(() => {
+    const handleStateChange = (status: { isActive: boolean }) => {
+      console.log("App state changed. Is active:", status.isActive);
+      if (status.isActive) {
+        // App came to foreground
+        if (state !== "disconnected" && state !== "connecting") {
+          console.log("App returned to foreground, session was active.");
+        }
+      } else {
+        // App went to background (e.g. power button clicked)
+        console.log("App went to background.");
+      }
+    };
+
+    const listener = CapApp.addListener("appStateChange", handleStateChange);
+    
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, [state]);
 
   // Test connection
   useEffect(() => {
