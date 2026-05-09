@@ -50,6 +50,8 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
+
 interface Message {
   id: string;
   text: string;
@@ -282,7 +284,8 @@ export default function App() {
           console.error("Error saving to history:", error);
           handleFirestoreError(error, OperationType.CREATE, path);
         }
-      }
+      },
+      (err) => setErrorMessage(err)
     );
 
     return () => {
@@ -315,6 +318,12 @@ export default function App() {
   }, [state]);
 
   const toggleSession = async () => {
+    try {
+      await Haptics.impact({ style: ImpactStyle.Heavy });
+    } catch (e) {
+      // Haptics might fail in browser, ignore
+    }
+
     if (state === "disconnected") {
       const activeProfile = profiles.find(p => p.id === activeProfileId);
       const voice = activeProfile?.voiceName || selectedVoice;

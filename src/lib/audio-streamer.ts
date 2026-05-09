@@ -20,10 +20,18 @@ export class AudioStreamer {
     this.audioContext = new AudioContext({ sampleRate: 16000 });
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      this.audioContext.close();
-      this.audioContext = null;
-      throw err;
+    } catch (err: any) {
+      if (this.audioContext) {
+        this.audioContext.close();
+        this.audioContext = null;
+      }
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        throw new Error("Microphone permission denied. Please allow microphone access in your Android settings.");
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        throw new Error("No microphone found. Please check your device hardware.");
+      } else {
+        throw new Error("Could not access microphone: " + (err.message || "Unknown error"));
+      }
     }
 
     if (!this.audioContext) return; // Handle case where stop() was called during getUserMedia

@@ -10,13 +10,16 @@ export class LiveSession {
   private state: SessionState = "disconnected";
   private onStateChange: (state: SessionState) => void;
   private onTranscription: (text: string, isModel: boolean) => void;
+  private onError: (message: string) => void;
 
   constructor(
     onStateChange: (state: SessionState) => void,
-    onTranscription: (text: string, isModel: boolean) => void
+    onTranscription: (text: string, isModel: boolean) => void,
+    onError: (message: string) => void
   ) {
     this.onStateChange = onStateChange;
     this.onTranscription = onTranscription;
+    this.onError = onError;
     this.audioStreamer = new AudioStreamer((base64) => {
       if (this.sessionPromise && this.state !== "disconnected") {
         this.sessionPromise.then((session) => {
@@ -75,6 +78,7 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
           },
           onerror: (err: any) => {
             console.error("Live session error:", err);
+            this.onError(err.message || "An error occurred during the live session.");
             this.disconnect();
           },
         },
@@ -136,8 +140,9 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
           ],
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to connect to Live API:", error);
+      this.onError(error.message || "Failed to wake up Sara. Check your internet and microphone.");
       this.setState("disconnected");
       this.sessionPromise = null;
     }
