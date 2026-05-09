@@ -40,9 +40,9 @@ export class LiveSession {
       // Check for microphone early to catch permission issues BEFORE connecting
       await this.audioStreamer.checkPermissions();
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || (process.env.GEMINI_API_KEY as string);
       if (!apiKey) {
-        throw new Error("Sara's brain (API Key) is missing. If you built this APK yourself, please add the GEMINI_API_KEY to your project secrets.");
+        throw new Error("Sara's brain (API Key) is missing. If you built this APK yourself, please add the VITE_GEMINI_API_KEY to your project environment variables.");
       }
       this.ai = new GoogleGenAI({ apiKey });
 

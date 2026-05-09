@@ -28,16 +28,23 @@ jobs:
 
       - name: Build Web App
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run build
 
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Fix Gradle Wrapper
+        run: |
+          cd android
+          rm -f gradle/wrapper/gradle-wrapper.jar
+          rm -f gradle/wrapper/gradle-wrapper.properties
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+
       - name: Build Android APK
         run: |
           cd android
-          chmod +x gradlew
           ./gradlew assembleDebug -x lint -x test
 
       - name: Upload APK

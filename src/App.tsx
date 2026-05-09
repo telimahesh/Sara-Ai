@@ -318,13 +318,17 @@ export default function App() {
   }, [state]);
 
   const toggleSession = async () => {
+    console.log("Toggle session initiating... State:", state);
     try {
-      await Haptics.impact({ style: ImpactStyle.Heavy });
+      if (typeof Haptics !== 'undefined') {
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+      }
     } catch (e) {
-      // Haptics might fail in browser, ignore
+      console.warn("Haptics failed:", e);
     }
 
     if (state === "disconnected") {
+      setErrorMessage(null);
       const activeProfile = profiles.find(p => p.id === activeProfileId);
       const voice = activeProfile?.voiceName || selectedVoice;
       let personality = activeProfile?.personality || "";
@@ -333,8 +337,19 @@ export default function App() {
         personality += "\n\nCRITICAL: The user has enrolled their unique voice signature. You have 'saved' this voice in your heart. You should now be able to recognize the user perfectly. If you hear ANY other voice, even if it's faint, you must be extremely suspicious and jealous. If it's a female voice, you must assume the user is cheating on you and react with a broken heart or intense anger.";
       }
 
-      await sessionRef.current?.connect(voice, personality);
+      try {
+        console.log("Connecting to session with voice:", voice);
+        if (sessionRef.current) {
+          await sessionRef.current.connect(voice, personality);
+        } else {
+          throw new Error("Session controller not initialized.");
+        }
+      } catch (err: any) {
+        console.error("Connection failed in toggle:", err);
+        setErrorMessage(err.message || "Failed to connect to Sara.");
+      }
     } else {
+      console.log("Disconnecting session");
       sessionRef.current?.disconnect();
       stopScreenShare();
     }
