@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Sara AI Assistant",
-  "description": "A sassy, witty, and flirty voice-to-voice AI assistant named Sara.",
+  "name": "Sara AI Assistant",
+  "description": "Your sassy, witty, and flirty AI companion for voice conversations and memories.",
   "requestFramePermissions": [
     "microphone",
     "camera",

@@ -9,8 +9,8 @@ import {
   Fingerprint,
   X
 } from "lucide-react";
-import { db } from "../lib/firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { doc, setDoc, onSnapshot, deleteDoc } from "firebase/firestore";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 
@@ -27,7 +27,8 @@ export function VoiceEnrollment({ userId }: VoiceEnrollmentProps) {
   useEffect(() => {
     if (!userId) return;
 
-    const unsubscribe = onSnapshot(doc(db, `users/${userId}/voice_enrollment/default`), (doc) => {
+    const path = `users/${userId}/voice_enrollment/default`;
+    const unsubscribe = onSnapshot(doc(db, path), (doc) => {
       if (doc.exists()) {
         setEnrolledData(doc.data());
         setEnrollmentStatus("success");
@@ -35,6 +36,8 @@ export function VoiceEnrollment({ userId }: VoiceEnrollmentProps) {
         setEnrolledData(null);
         setEnrollmentStatus("none");
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
     });
 
     return () => unsubscribe();
@@ -57,6 +60,7 @@ export function VoiceEnrollment({ userId }: VoiceEnrollmentProps) {
     }, 100);
 
     setTimeout(async () => {
+      const path = `users/${userId}/voice_enrollment/default`;
       try {
         const enrollment = {
           uid: userId,
@@ -65,25 +69,28 @@ export function VoiceEnrollment({ userId }: VoiceEnrollmentProps) {
           voiceDescription: "User's unique vocal signature registered."
         };
 
-        await setDoc(doc(db, `users/${userId}/voice_enrollment/default`), enrollment);
+        await setDoc(doc(db, path), enrollment);
         setEnrollmentStatus("success");
         setIsEnrolling(false);
       } catch (error) {
         console.error("Enrollment failed:", error);
         setEnrollmentStatus("error");
         setIsEnrolling(false);
+        handleFirestoreError(error, OperationType.WRITE, path);
       }
     }, 5500);
   };
 
   const deleteEnrollment = async () => {
     if (!confirm("Are you sure you want to delete your voice signature? Sara might forget who you are!")) return;
+    const path = `users/${userId}/voice_enrollment/default`;
     try {
-      await setDoc(doc(db, `users/${userId}/voice_enrollment/default`), { isEnrolled: false }, { merge: true });
+      await setDoc(doc(db, path), { isEnrolled: false }, { merge: true });
       // In a real app we might delete the doc, but here we just toggle
       setEnrollmentStatus("none");
     } catch (error) {
       console.error("Failed to delete enrollment:", error);
+      handleFirestoreError(error, OperationType.WRITE, path);
     }
   };
 
@@ -200,6 +207,32 @@ export function VoiceEnrollment({ userId }: VoiceEnrollmentProps) {
                   Delete Profile
                 </Button>
               </div>
+            </motion.div>
+          )}
+
+          {enrollmentStatus === "error" && (
+            <motion.div 
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center text-center gap-4"
+            >
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20">
+                <AlertCircle className="w-8 h-8 text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Enrollment Failed</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Something went wrong during the voice analysis. Please try again in a quieter environment.
+                </p>
+              </div>
+              <Button 
+                onClick={startEnrollment}
+                className="bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl px-8 py-4 font-bold uppercase tracking-widest text-[10px]"
+              >
+                Try Again
+              </Button>
             </motion.div>
           )}
         </AnimatePresence>

@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { AdminPanel } from "@/components/AdminPanel";
 import { SystemControls } from "./components/SystemControls";
 import { VoiceEnrollment } from "./components/VoiceEnrollment";
-import { auth, db, signIn, signOut } from "@/lib/firebase";
+import { auth, db, signIn, signOut, signInAsGuest, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { 
   collection, 
   addDoc, 
@@ -67,57 +67,6 @@ interface VoiceProfile {
   isDefault?: boolean;
 }
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
 export default function App() {
   const [state, setState] = useState<SessionState>("disconnected");
   const [volume, setVolume] = useState(0);
@@ -147,6 +96,32 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const screenCaptureIntervalRef = useRef<number | null>(null);
 
+  const handleSignIn = async () => {
+    try {
+      setErrorMessage(null);
+      await signIn();
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      setErrorMessage(error.message || "Failed to sign in with Google.");
+    }
+  };
+
+  const handleGuestSignIn = async () => {
+    try {
+      setErrorMessage(null);
+      await signInAsGuest();
+    } catch (error: any) {
+      console.error("Guest sign in error:", error);
+      if (error.code === 'auth/admin-restricted-operation' || error.message?.includes('admin-restricted-operation')) {
+        setErrorMessage("Guest login (Anonymous Auth) is disabled. Please enable it in your Firebase Console (Build > Authentication > Sign-in method).");
+      } else if (error.code === 'auth/network-request-failed') {
+        setErrorMessage("Network error. Please check your internet connection and ensure your Auth Domain is correctly configured in Firebase.");
+      } else {
+        setErrorMessage(error.message || "Failed to sign in as guest.");
+      }
+    }
+  };
+
   const handleAdminClick = () => {
     setAdminClickCount(prev => prev + 1);
     if (adminTimeoutRef.current) clearTimeout(adminTimeoutRef.current);
@@ -166,9 +141,24 @@ export default function App() {
     async function testConnection() {
       try {
         await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
+        console.log("Firestore connection successful.");
+        setErrorMessage(null); // Clear any previous startup error
+      } catch (error: any) {
+        if (error?.code === 'permission-denied') {
+          console.log("Firestore reachable (Permission Denied is acceptable for connection test).");
+          setErrorMessage(null);
+          return;
+        }
+
+        if (error instanceof Error) {
+          if (error.message.includes('unavailable') || error.message.includes('offline')) {
+            console.warn("Firestore is currently unreachable. This might be because the database was just created or there's a temporary network issue.");
+            setErrorMessage("Firestore is starting up... Please wait a moment while I prepare your sassy girlfriend.");
+            // Retry once after 10 seconds (increased delay for newly created DBs)
+            setTimeout(testConnection, 10000);
+          } else {
+            console.error("Firestore connection status:", error.message);
+          }
         }
       }
     }
@@ -180,9 +170,14 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
+      
+      // Auto-sign in as guest if no user is present
+      if (!u && isAuthReady) {
+        handleGuestSignIn();
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAuthReady]);
 
   // Firestore History Listener
   useEffect(() => {
@@ -257,8 +252,11 @@ export default function App() {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(db, `users/${user.uid}/voice_enrollment/default`), (doc) => {
+    const path = `users/${user.uid}/voice_enrollment/default`;
+    const unsubscribe = onSnapshot(doc(db, path), (doc) => {
       setIsVoiceEnrolled(doc.exists() && doc.data()?.isEnrolled === true);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
     });
 
     return () => unsubscribe();
@@ -388,7 +386,7 @@ export default function App() {
 
   const setDefaultProfile = async (id: string) => {
     if (!user) return;
-    const path = 'profiles';
+    const path = `users/${user.uid}/profiles`;
     try {
       const batch = writeBatch(db);
       profiles.forEach(p => {
@@ -432,7 +430,7 @@ export default function App() {
 
         // Start capture loop
         screenCaptureIntervalRef.current = window.setInterval(() => {
-          if (videoRef.current && canvasRef.current && sessionRef.current && state === "listening" || state === "connected") {
+          if (videoRef.current && canvasRef.current && sessionRef.current && (state === "listening" || state === "connected" || state === "speaking")) {
             const canvas = canvasRef.current;
             const video = videoRef.current;
             const context = canvas.getContext("2d");
@@ -527,17 +525,6 @@ export default function App() {
         </div>
         
         <div className="flex gap-4 items-center">
-          {user && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => signOut()}
-              className="text-zinc-400 hover:text-red-400 hover:bg-red-400/10"
-              title="Sign Out"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="icon"
@@ -616,28 +603,59 @@ export default function App() {
       </AnimatePresence>
 
       {/* Main Interaction Area */}
-      {!user && isAuthReady ? (
+      {(!user && isAuthReady && errorMessage) ? (
         <div className="relative flex flex-col items-center justify-center gap-8 z-10 w-full max-w-md px-6 text-center">
           <div className="w-24 h-24 bg-pink-500/10 rounded-full flex items-center justify-center border border-pink-500/20">
             <Sparkles className="w-12 h-12 text-pink-500" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight mb-2 uppercase italic">Meet Sara</h2>
-            <p className="text-zinc-500 text-sm">Sign in to start your sassy conversation and save your memories.</p>
+            <h2 className="text-2xl font-bold tracking-tight mb-2 uppercase italic">Connection Issue</h2>
+            <p className="text-zinc-500 text-sm">{errorMessage}</p>
           </div>
-          <Button 
-            onClick={() => signIn()}
-            className="bg-pink-600 hover:bg-pink-500 text-white rounded-full px-12 py-6 font-bold uppercase tracking-widest text-xs shadow-lg shadow-pink-500/20"
-          >
-            <LogIn className="w-4 h-4 mr-2" />
-            Sign in with Google
-          </Button>
+          <div className="flex flex-col gap-3 w-full">
+            <Button 
+              onClick={handleGuestSignIn}
+              className="bg-pink-600 hover:bg-pink-500 text-white rounded-full px-12 py-6 font-bold uppercase tracking-widest text-xs shadow-lg shadow-pink-500/20"
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="relative flex flex-col items-center justify-center gap-12 z-10 w-full max-w-md px-6">
           
           {/* Visualizer / Avatar */}
           <div className="relative w-64 h-64 flex items-center justify-center">
+            {/* Screen Share Floating Button */}
+            {state !== "disconnected" && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="absolute -top-4 -right-4 z-30"
+              >
+                <Button
+                  onClick={toggleScreenShare}
+                  className={cn(
+                    "w-12 h-12 rounded-full p-0 shadow-lg transition-all duration-500",
+                    isScreenSharing 
+                      ? "bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20" 
+                      : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-white/5"
+                  )}
+                  title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
+                >
+                  <Monitor className="w-5 h-5" />
+                  {isScreenSharing && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                    </span>
+                  )}
+                </Button>
+              </motion.div>
+            )}
+
             {/* Outer Rings */}
             <AnimatePresence>
               {state !== "disconnected" && (
@@ -831,7 +849,7 @@ export default function App() {
                         : "text-zinc-500 hover:text-zinc-300"
                     )}
                   >
-                    Voice
+                    Voice Enrollment
                   </button>
                   <button
                     onClick={() => setSettingsTab("permissions")}
@@ -964,28 +982,43 @@ export default function App() {
                                 className={cn(
                                   "group flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
                                   activeProfileId === profile.id 
-                                    ? "bg-cyan-500/10 border-cyan-500/30" 
+                                    ? "bg-cyan-500/10 border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.1)]" 
                                     : "bg-white/5 border-white/5 hover:bg-white/10"
                                 )}
                               >
                                 <div 
-                                  className="flex-1 cursor-pointer"
+                                  className="flex-1 cursor-pointer flex items-center gap-4"
                                   onClick={() => setDefaultProfile(profile.id)}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <span className={cn(
-                                      "font-bold text-sm tracking-tight",
-                                      activeProfileId === profile.id ? "text-cyan-400" : "text-zinc-300"
-                                    )}>
-                                      {profile.name}
-                                    </span>
-                                    {profile.isDefault && (
-                                      <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded uppercase font-bold">Default</span>
-                                    )}
+                                  <div className={cn(
+                                    "w-10 h-10 rounded-full flex items-center justify-center border transition-all",
+                                    activeProfileId === profile.id ? "bg-cyan-500/20 border-cyan-500/40" : "bg-white/5 border-white/10"
+                                  )}>
+                                    <div className={cn(
+                                      "w-3 h-3 rounded-full shadow-[0_0_10px_currentColor]",
+                                      profile.voiceName === "Aoede" ? "text-purple-400 bg-purple-400" :
+                                      profile.voiceName === "Charon" ? "text-blue-400 bg-blue-400" :
+                                      profile.voiceName === "Fenrir" ? "text-amber-400 bg-amber-400" :
+                                      profile.voiceName === "Kore" ? "text-pink-400 bg-pink-400" :
+                                      "text-emerald-400 bg-emerald-400"
+                                    )} />
                                   </div>
-                                  <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mt-0.5">
-                                    Voice: {profile.voiceName}
-                                  </p>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={cn(
+                                        "font-bold text-sm tracking-tight",
+                                        activeProfileId === profile.id ? "text-cyan-400" : "text-zinc-300"
+                                      )}>
+                                        {profile.name}
+                                      </span>
+                                      {profile.isDefault && (
+                                        <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded uppercase font-bold">Default</span>
+                                      )}
+                                    </div>
+                                    <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mt-0.5">
+                                      {profile.voiceName}
+                                    </p>
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Button
@@ -1015,23 +1048,41 @@ export default function App() {
                       </div>
 
                       <div className="pt-4 border-t border-white/5">
-                        <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-3 block">
-                          Quick Voice Override
-                        </label>
+                        <div className="flex justify-between items-end mb-3">
+                          <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">
+                            Quick Voice Selection
+                          </label>
+                          <span className="text-[9px] font-bold text-pink-500 uppercase tracking-tighter bg-pink-500/10 px-2 py-0.5 rounded-full">
+                            Active: {selectedVoice}
+                          </span>
+                        </div>
                         <div className="grid grid-cols-5 gap-2">
                           {["Aoede", "Charon", "Fenrir", "Kore", "Puck"].map((voice) => (
                             <button
                               key={voice}
                               onClick={() => setSelectedVoice(voice)}
                               className={cn(
-                                "flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-300",
+                                "relative flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 overflow-hidden group",
                                 selectedVoice === voice 
-                                  ? "bg-pink-500/10 border-pink-500 text-pink-400" 
+                                  ? "bg-pink-500/10 border-pink-500 text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.1)]" 
                                   : "bg-white/5 border-white/5 text-zinc-500 hover:bg-white/10"
                               )}
                             >
-                              <div className="w-2 h-2 rounded-full mb-1 bg-current" />
-                              <span className="text-[8px] font-bold uppercase tracking-tighter">{voice}</span>
+                              <div className={cn(
+                                "w-1.5 h-1.5 rounded-full mb-1.5 transition-all duration-500 group-hover:scale-125",
+                                voice === "Aoede" ? "bg-purple-400" :
+                                voice === "Charon" ? "bg-blue-400" :
+                                voice === "Fenrir" ? "bg-amber-400" :
+                                voice === "Kore" ? "bg-pink-400" :
+                                "bg-emerald-400"
+                              )} />
+                              <span className="text-[8px] font-bold uppercase tracking-tighter z-10">{voice}</span>
+                              {selectedVoice === voice && (
+                                <motion.div 
+                                  layoutId="voice-indicator"
+                                  className="absolute inset-0 bg-pink-500/5 pointer-events-none"
+                                />
+                              )}
                             </button>
                           ))}
                         </div>
@@ -1045,118 +1096,6 @@ export default function App() {
                       exit={{ x: -20, opacity: 0 }}
                       className="space-y-6"
                     >
-                      {settingsTab === "profiles" && (
-                        <div className="space-y-6">
-                          <div>
-                            <div className="flex justify-between items-center mb-4">
-                              <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 block">
-                                Voice Profiles
-                              </label>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setIsEditingProfile(true);
-                                  setEditingProfile({
-                                    name: "",
-                                    voiceName: "Kore",
-                                    personality: "You are Sara, a young, confident, witty, and sassy female AI assistant..."
-                                  });
-                                }}
-                                className="h-7 text-[10px] uppercase tracking-widest text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10"
-                              >
-                                <Plus className="w-3 h-3 mr-1" />
-                                New Profile
-                              </Button>
-                            </div>
-                            
-                            <div className="space-y-2">
-                              {profiles.length === 0 ? (
-                                <div className="p-4 bg-white/5 border border-dashed border-white/10 rounded-2xl text-center">
-                                  <p className="text-xs text-zinc-500 italic">No custom profiles yet.</p>
-                                </div>
-                              ) : (
-                                profiles.map((profile) => (
-                                  <div
-                                    key={profile.id}
-                                    className={cn(
-                                      "group flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
-                                      activeProfileId === profile.id 
-                                        ? "bg-cyan-500/10 border-cyan-500/30" 
-                                        : "bg-white/5 border-white/5 hover:bg-white/10"
-                                    )}
-                                  >
-                                    <div 
-                                      className="flex-1 cursor-pointer"
-                                      onClick={() => setDefaultProfile(profile.id)}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <span className={cn(
-                                          "font-bold text-sm tracking-tight",
-                                          activeProfileId === profile.id ? "text-cyan-400" : "text-zinc-300"
-                                        )}>
-                                          {profile.name}
-                                        </span>
-                                        {profile.isDefault && (
-                                          <span className="text-[8px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded uppercase font-bold">Default</span>
-                                        )}
-                                      </div>
-                                      <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest mt-0.5">
-                                        Voice: {profile.voiceName}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setEditingProfile(profile);
-                                          setIsEditingProfile(true);
-                                        }}
-                                        className="h-8 w-8 text-zinc-500 hover:text-cyan-400"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => deleteProfile(profile.id)}
-                                        className="h-8 w-8 text-zinc-500 hover:text-red-400"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="pt-4 border-t border-white/5">
-                            <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-3 block">
-                              Quick Voice Override
-                            </label>
-                            <div className="grid grid-cols-5 gap-2">
-                              {["Aoede", "Charon", "Fenrir", "Kore", "Puck"].map((voice) => (
-                                <button
-                                  key={voice}
-                                  onClick={() => setSelectedVoice(voice)}
-                                  className={cn(
-                                    "flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-300",
-                                    selectedVoice === voice 
-                                      ? "bg-pink-500/10 border-pink-500 text-pink-400" 
-                                      : "bg-white/5 border-white/5 text-zinc-500 hover:bg-white/10"
-                                  )}
-                                >
-                                  <div className="w-2 h-2 rounded-full mb-1 bg-current" />
-                                  <span className="text-[8px] font-bold uppercase tracking-tighter">{voice}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       {settingsTab === "voice" && user && (
                         <VoiceEnrollment userId={user.uid} />
                       )}

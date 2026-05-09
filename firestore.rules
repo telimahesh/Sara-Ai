@@ -15,28 +15,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
 
     // ===============================================================
-    // Helper Functions
+    // Global Helper Primitives
     // ===============================================================
-
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
+    function incoming() {
+      return request.resource.data;
     }
 
-    // Domain Validators
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // ===============================================================
+    // Entity Validators (The "Anti-Update-Gap")
+    // ===============================================================
+    
     function isValidMessage(data) {
       return data.keys().hasAll(['text', 'isModel', 'timestamp', 'uid']) &&
-             data.keys().hasOnly(['text', 'isModel', 'timestamp', 'uid']) &&
-             data.text is string && data.text.size() > 0 && data.text.size() <= 5000 &&
+             data.keys().size() == 4 &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 10000 &&
              data.isModel is bool &&
              data.timestamp is timestamp &&
              data.uid is string && data.uid == request.auth.uid;
@@ -44,45 +63,65 @@ service cloud.firestore {
 
     function isValidProfile(data) {
       return data.keys().hasAll(['name', 'voiceName', 'personality', 'uid']) &&
-             data.keys().hasOnly(['name', 'voiceName', 'personality', 'uid', 'isDefault']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.voiceName is string &&
-             data.personality is string && data.personality.size() <= 10000 &&
+             data.keys().size() >= 4 && data.keys().size() <= 5 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.voiceName is string && data.voiceName.size() <= 128 &&
+             data.personality is string && data.personality.size() <= 20000 &&
              data.uid is string && data.uid == request.auth.uid &&
              (!('isDefault' in data) || data.isDefault is bool);
     }
 
+    function isValidEnrollment(data) {
+      return data.keys().hasAll(['uid', 'enrolledAt', 'isEnrolled']) &&
+             data.uid is string && data.uid == request.auth.uid &&
+             data.enrolledAt is string &&
+             data.isEnrolled is bool &&
+             (!('voiceDescription' in data) || (data.voiceDescription is string && data.voiceDescription.size() <= 1000));
+    }
+
     // ===============================================================
-    // Rules
+    // Collection Matches
     // ===============================================================
 
     match /users/{userId} {
+      // Guard the userId path variable
+      allow get: if isOwner(userId);
+
       match /messages/{messageId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidMessage(request.resource.data);
-        allow update: if false;
+        // ID Poisoning Guard
+        allow get: if isOwner(userId) && isValidId(messageId);
+        allow list: if isOwner(userId);
+        
+        allow create: if isOwner(userId) && 
+                      isValidMessage(incoming()) && 
+                      incoming().timestamp == request.time;
+                      
+        allow update: if false; // Messages are immutable
         allow delete: if isOwner(userId);
       }
 
       match /profiles/{profileId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidProfile(request.resource.data);
-        allow update: if isOwner(userId) && isValidProfile(request.resource.data);
+        allow get: if isOwner(userId) && isValidId(profileId);
+        allow list: if isOwner(userId);
+        
+        allow create: if isOwner(userId) && isValidProfile(incoming());
+        
+        allow update: if isOwner(userId) && 
+                      isValidProfile(incoming()) && (
+                        // Action: Update entire profile or just default status
+                        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'voiceName', 'personality', 'isDefault'])
+                      );
+                      
         allow delete: if isOwner(userId);
       }
 
-      // User Voice Enrollment
       match /voice_enrollment/{docId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && 
-          hasOnlyAllowedFields(['uid', 'enrolledAt', 'voiceDescription', 'isEnrolled']) &&
-          request.resource.data.uid == userId;
+        allow get: if isOwner(userId) && isValidId(docId);
+        allow list: if isOwner(userId);
+        
+        allow create, update: if isOwner(userId) && isValidEnrollment(incoming());
         allow delete: if isOwner(userId);
       }
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }
