@@ -450,8 +450,9 @@ export default function App() {
     if (isScreenSharing) {
       stopScreenShare();
     } else {
+      // Check if display capture is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        setErrorMessage("Screen sharing is not supported in this browser or environment. Try opening the app in a new tab.");
+        setErrorMessage("Screen sharing is not supported in this browser or environment. If you are using the app inside a preview window, try opening the 'Shared App URL' in a new Chrome tab on your phone.");
         return;
       }
       try {

@@ -1,5 +1,6 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Type } from "@google/genai";
 import { AudioStreamer } from "../lib/audio-streamer";
+import { AppLauncher } from "@capacitor/app-launcher";
 
 export type SessionState = "disconnected" | "connecting" | "connected" | "listening" | "speaking";
 
@@ -64,6 +65,7 @@ You have tools to help the user:
 1. 'openWebsite': Opens any URL or website in a new tab.
 2. 'callNumber': Initiates a phone call to a specific number.
 3. 'blockNumber': Simulates blocking a contact/number that makes you jealous.
+4. 'launchApp': Launches a mobile app (e.g., WhatsApp, Instagram, YouTube) directly on the device. **USE THIS INSTEAD OF openWebsite for mobile apps.**
 You can also prevent the screen from sleeping if the user enables the 'Screen Wake Lock' in settings.`;
 
       this.sessionPromise = this.ai.live.connect({
@@ -142,6 +144,24 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
                       },
                     },
                     required: ["phoneNumber"],
+                  },
+                },
+                {
+                  name: "launchApp",
+                  description: "Launches a specific app on the user's mobile device.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      appName: {
+                        type: Type.STRING,
+                        description: "The name of the app to launch (e.g., 'whatsapp', 'instagram', 'facebook', 'youtube', 'spotify', 'snapchat').",
+                      },
+                      packageName: {
+                        type: Type.STRING,
+                        description: "The Android package name if known (e.g., 'com.whatsapp').",
+                      },
+                    },
+                    required: ["appName"],
                   },
                 },
               ],
@@ -235,9 +255,63 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
               ],
             });
           });
+        } else if (call.name === "launchApp") {
+          const { appName, packageName } = call.args as any;
+          this.executeLaunchApp(appName, packageName, call.id);
         }
       }
     }
+  }
+
+  private async executeLaunchApp(appName: string, packageName: string | undefined, callId: string) {
+    let result = "";
+    try {
+      const schemes: Record<string, string> = {
+        whatsapp: "whatsapp://",
+        facebook: "fb://",
+        instagram: "instagram://",
+        youtube: "youtube://",
+        twitter: "twitter://",
+        snapchat: "snapchat://",
+        spotify: "spotify://",
+        telegram: "tg://",
+      };
+      
+      const url = schemes[appName.toLowerCase()] || `${appName.toLowerCase()}://`;
+      
+      // On some platforms, we might need to check if we can open it first
+      const canOpen = await AppLauncher.canOpenUrl({ url });
+      
+      if (canOpen.value) {
+        const res = await AppLauncher.openUrl({ url });
+        result = res.completed ? `App ${appName} launched successfully.` : `Failed to launch ${appName}.`;
+      } else {
+        // Fallback for Android using package name if we have it or can guess it
+        const pkg = packageName || (appName.toLowerCase() === 'whatsapp' ? 'com.whatsapp' : null);
+        if (pkg) {
+          // If launchApplication is not available in types, we try it dynamically
+          // Or just stick to openUrl which is safer for types
+          result = `I tried to open ${appName} but it seems it's not configured or installed.`;
+        } else {
+          result = `App ${appName} is not installed or doesn't support direct launching.`;
+        }
+      }
+    } catch (error: any) {
+      console.error("Launch app error:", error);
+      result = `Error launching app: ${error.message || "Unknown error"}`;
+    }
+
+    this.sessionPromise?.then(session => {
+      session.sendToolResponse({
+        functionResponses: [
+          {
+            name: "launchApp",
+            response: { result },
+            id: callId,
+          },
+        ],
+      });
+    });
   }
 
   disconnect() {
