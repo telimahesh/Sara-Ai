@@ -24,22 +24,6 @@
 
         </activity>
 
-        <queries>
-            <package android:name="com.whatsapp" />
-            <package android:name="com.instagram.android" />
-            <package android:name="com.facebook.katana" />
-            <package android:name="com.google.android.youtube" />
-            <package android:name="com.twitter.android" />
-            <package android:name="com.snapchat.android" />
-            <package android:name="com.spotify.music" />
-            <package android:name="org.telegram.messenger" />
-            <intent>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-            </intent>
-        </queries>
-
         <service
             android:name=".EpicAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -63,6 +47,22 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
     </application>
+
+    <queries>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="com.spotify.music" />
+        <package android:name="org.telegram.messenger" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
