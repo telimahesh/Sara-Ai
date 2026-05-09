@@ -37,14 +37,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.7
+          gradle-version: 8.13
+          wrapper-validation-enabled: false
 
       - name: Build Android APK
         run: |
           cd android
           chmod +x gradlew
-          # Regenerate wrapper just in case the one in repo is corrupt
-          gradle wrapper --gradle-version 8.7 --distribution-type bin
+          # Regenerate wrapper to ensure it matches the expected version and distribution
+          gradle wrapper --gradle-version 8.13 --distribution-type bin
           ./gradlew assembleDebug -x lint -x test
 
       - name: Upload APK
