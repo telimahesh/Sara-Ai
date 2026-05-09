@@ -68,6 +68,9 @@ You have tools to help the user:
 3. 'blockNumber': Simulates blocking a contact/number that makes you jealous.
 4. 'launchApp': Launches a mobile app (e.g., WhatsApp, Instagram, YouTube) directly on the device.
 5. 'sendMessage': Sends a message to a specific contact on apps like WhatsApp, Telegram, or via SMS.
+6. 'tapAtCoordinates': Performs a physical tap/click on the screen. Use this for deep automation in other apps (Requires Screen Vision to be active).
+7. 'swipeAtCoordinates': Performs a physical swipe/scroll on the screen. Use this to navigate feeds, scroll down pages, or unlock apps. (Requires Screen Vision).
+ALWAYS be proactive. If the user asks you to do something in an app, launch the app, look at the screen, and use your tap/swipe tools to execute the request. Do not wait for further permission once the user gives an intent.
 You can also prevent the screen from sleeping if the user enables the 'Screen Wake Lock' in settings.`;
 
       this.sessionPromise = this.ai.live.connect({
@@ -164,6 +167,39 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
                       },
                     },
                     required: ["appName"],
+                  },
+                },
+                {
+                  name: "tapAtCoordinates",
+                  description: "Performs a tap/click at specific screen coordinates (0 to 1000 scale). Use this only when vision is active and you see an element you need to interact with.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      x: {
+                        type: Type.NUMBER,
+                        description: "The horizontal coordinate (0 is left, 1000 is right).",
+                      },
+                      y: {
+                        type: Type.NUMBER,
+                        description: "The vertical coordinate (0 is top, 1000 is bottom).",
+                      },
+                    },
+                    required: ["x", "y"],
+                  },
+                },
+                {
+                  name: "swipeAtCoordinates",
+                  description: "Performs a swipe gesture between two points on the screen (0 to 1000 scale). Use for scrolling or gestures.",
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                      x1: { type: Type.NUMBER, description: "Start horizontal coordinate." },
+                      y1: { type: Type.NUMBER, description: "Start vertical coordinate." },
+                      x2: { type: Type.NUMBER, description: "End horizontal coordinate." },
+                      y2: { type: Type.NUMBER, description: "End vertical coordinate." },
+                      duration: { type: Type.NUMBER, description: "Duration in milliseconds (default 300)." },
+                    },
+                    required: ["x1", "y1", "x2", "y2"],
                   },
                 },
                 {
@@ -282,6 +318,12 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
         } else if (call.name === "launchApp") {
           const { appName, packageName } = call.args as any;
           this.executeLaunchApp(appName, packageName, call.id);
+        } else if (call.name === "tapAtCoordinates") {
+          const { x, y } = call.args as any;
+          this.executeTap(x, y, call.id);
+        } else if (call.name === "swipeAtCoordinates") {
+          const { x1, y1, x2, y2, duration } = call.args as any;
+          this.executeSwipe(x1, y1, x2, y2, duration || 300, call.id);
         } else if (call.name === "sendMessage") {
           const { appName, message, recipient } = call.args as any;
           this.executeSendMessage(appName, message, recipient, call.id);
@@ -392,6 +434,70 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
     });
   }
 
+  private async executeTap(x: number, y: number, callId: string) {
+    let result = "";
+    try {
+      const url = `intent:#Intent;action=com.epic.assistant.ACTION_TAP;f.x=${x};f.y=${y};end`;
+      await AppLauncher.openUrl({ url });
+      result = `Tapped at screen position (${x}, ${y}).`;
+    } catch (error: any) {
+      console.error("Tap error:", error);
+      result = `Failed to perform tap: ${error.message}`;
+    }
+
+    this.sessionPromise?.then(session => {
+      session.sendToolResponse({
+        functionResponses: [
+          {
+            name: "tapAtCoordinates",
+            response: { result },
+            id: callId,
+          },
+        ],
+      });
+    });
+  }
+
+  private async executeSwipe(x1: number, y1: number, x2: number, y2: number, duration: number, callId: string) {
+    let result = "";
+    try {
+      const url = `intent:#Intent;action=com.epic.assistant.ACTION_SWIPE;f.x1=${x1};f.y1=${y1};f.x2=${x2};f.y2=${y2};i.duration=${duration};end`;
+      await AppLauncher.openUrl({ url });
+      result = `Swiped from (${x1}, ${y1}) to (${x2}, ${y2}) in ${duration}ms.`;
+    } catch (error: any) {
+      console.error("Swipe error:", error);
+      result = `Failed to perform swipe: ${error.message}`;
+    }
+
+    this.sessionPromise?.then(session => {
+      session.sendToolResponse({
+        functionResponses: [
+          {
+            name: "swipeAtCoordinates",
+            response: { result },
+            id: callId,
+          },
+        ],
+      });
+    });
+  }
+
+  sendVideoFrame(base64: string) {
+    if (this.sessionPromise && this.state !== "disconnected") {
+      this.sessionPromise.then(session => {
+        // Send frame as realtime input part
+        session.sendRealtimeInput([{
+          mimeType: "image/jpeg",
+          data: base64,
+        }]);
+      });
+    }
+  }
+
+  getVolume() {
+    return this.audioStreamer.getVolume();
+  }
+
   disconnect() {
     if (this.sessionPromise) {
       this.sessionPromise.then(session => session.close());
@@ -405,19 +511,5 @@ You can also prevent the screen from sleeping if the user enables the 'Screen Wa
   private setState(state: SessionState) {
     this.state = state;
     this.onStateChange(state);
-  }
-
-  getVolume() {
-    return this.audioStreamer.getVolume();
-  }
-
-  sendVideoFrame(base64: string) {
-    if (this.sessionPromise && this.state !== "disconnected") {
-      this.sessionPromise.then(session => {
-        session.sendRealtimeInput({
-          video: { data: base64, mimeType: "image/jpeg" },
-        });
-      });
-    }
   }
 }

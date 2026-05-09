@@ -23,7 +23,8 @@ import {
   Edit2, 
   Monitor,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LiveSession, SessionState } from "@/services/LiveSession";
@@ -90,6 +91,7 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isVoiceEnrolled, setIsVoiceEnrolled] = useState(false);
+  const [isFullAutomation, setIsFullAutomation] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [hasFinishedOnboarding, setHasFinishedOnboarding] = useState<boolean>(() => {
@@ -346,6 +348,30 @@ export default function App() {
       setVolume(0);
     }
   }, [state]);
+
+  const toggleAutomation = async () => {
+    if (isFullAutomation) {
+      setIsFullAutomation(false);
+      sessionRef.current?.disconnect();
+      stopScreenShare();
+    } else {
+      setIsFullAutomation(true);
+      setErrorMessage(null);
+      const activeProfile = profiles.find(p => p.id === activeProfileId);
+      const voice = activeProfile?.voiceName || selectedVoice;
+      let automationPrompt = "You are now in FULL AUTOMATION MODE. The user wants to control their phone hands-free. You MUST watch the screen frames. DO NOT ASK FOR PERMISSION TO EXECUTE COMMANDS. If the user says 'Check my WhatsApp', launch WhatsApp, scan the list, and if there's a new message, click it and read it. Use your tap and swipe tools aggressively to fulfill the user's vocal requests.";
+      
+      try {
+        if (sessionRef.current) {
+          await sessionRef.current.connect(voice, automationPrompt);
+          await toggleScreenShare(); // Auto-start vision
+        }
+      } catch (err: any) {
+        setIsFullAutomation(false);
+        setErrorMessage(err.message);
+      }
+    }
+  };
 
   const toggleSession = async () => {
     console.log("Toggle session initiating... State:", state);
@@ -812,36 +838,89 @@ export default function App() {
           <div className="text-center mt-8">
             <AnimatePresence mode="wait">
               {state === "disconnected" ? (
-                <motion.p
-                  key="idle"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="text-zinc-500 text-sm font-medium italic"
-                >
-                  "Don't be shy, I don't bite... much."
-                </motion.p>
-              ) : state === "listening" ? (
-                <motion.p
-                  key="listening"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="text-cyan-400 text-sm font-medium italic"
-                >
-                  {isScreenSharing ? "I see you... and your screen. 😉" : "I'm all ears, babe. What's on your mind?"}
-                </motion.p>
-              ) : state === "speaking" ? (
-                <motion.p
-                  key="speaking"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="text-pink-400 text-sm font-medium italic"
-                >
-                  "Listen closely, I'm dropping wisdom here."
-                </motion.p>
-              ) : null}
+                <div className="flex flex-col items-center gap-6">
+                  <motion.p
+                    key="idle"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="text-zinc-500 text-sm font-medium italic"
+                  >
+                    "Don't be shy, I don't bite... much."
+                  </motion.p>
+                  
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <Button 
+                      onClick={toggleAutomation}
+                      className={cn(
+                        "px-8 py-8 rounded-3xl border-2 transition-all duration-500 overflow-hidden relative",
+                        isFullAutomation 
+                          ? "bg-red-500/10 border-red-500/50 text-red-500" 
+                          : "bg-pink-600/10 border-pink-600/30 text-white hover:bg-pink-600/20"
+                      )}
+                    >
+                      {isFullAutomation && (
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                          transition={{ repeat: Infinity, duration: 2 }}
+                          className="absolute inset-0 bg-red-500/20"
+                        />
+                      )}
+                      <div className="relative z-10 flex flex-col items-center gap-2">
+                        {isFullAutomation ? (
+                          <>
+                            <Zap className="w-8 h-8 animate-pulse" />
+                            <div className="flex flex-col">
+                              <span className="text-sm font-black uppercase italic tracking-widest text-white">Automation Active</span>
+                              <span className="text-[10px] uppercase font-bold text-red-300">Hands-Free ON</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-8 h-8 text-pink-500" />
+                            <div className="flex flex-col">
+                              <span className="text-sm font-black uppercase italic tracking-widest text-white">Hands-Free Mode</span>
+                              <span className="text-[10px] uppercase font-bold opacity-50">Vision + Voice Automation</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </Button>
+                  </motion.div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <motion.p
+                    key={state}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className={cn(
+                      "text-sm font-medium italic",
+                      state === "speaking" ? "text-pink-400" : "text-cyan-400"
+                    )}
+                  >
+                    {state === "listening" 
+                      ? (isScreenSharing ? "I see you... and your screen. 😉" : "I'm all ears, babe. What's on your mind?")
+                      : "Listen closely, I'm dropping wisdom here."}
+                  </motion.p>
+                  
+                  {isFullAutomation && (
+                    <motion.div 
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full"
+                    >
+                      <Zap className="w-3 h-3 text-red-500" />
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-red-500 font-bold">Automation Mode Enabled</span>
+                    </motion.div>
+                  )}
+                </div>
+              )}
             </AnimatePresence>
           </div>
         </div>
