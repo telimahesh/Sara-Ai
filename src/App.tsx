@@ -529,11 +529,11 @@ export default function App() {
 
   const getStatusText = () => {
     switch (state) {
-      case "connecting": return "Waking up Sara...";
-      case "listening": return "Sara is listening...";
-      case "speaking": return "Sara is talking...";
-      case "connected": return "Ready for Sara";
-      default: return "Sara is sleeping";
+      case "connecting": return "Waking up the Assistant...";
+      case "listening": return "Listening...";
+      case "speaking": return "Speaking...";
+      case "connected": return "Ready";
+      default: return "Sleeping";
     }
   };
 
@@ -559,7 +559,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="text-4xl font-black tracking-tighter uppercase italic"
           >
-            Sara
+            Epic
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0 }}
@@ -567,7 +567,7 @@ export default function App() {
             transition={{ delay: 0.2 }}
             className="text-xs font-mono uppercase tracking-[0.2em] mt-1"
           >
-            Voice-to-Voice AI Assistant
+            Assistant AI
           </motion.p>
         </div>
         
@@ -1230,7 +1230,7 @@ export default function App() {
                         "text-[9px] font-bold uppercase tracking-widest mb-1 px-1",
                         msg.isModel ? "text-cyan-500" : "text-pink-500"
                       )}>
-                        {msg.isModel ? "Sara" : "You"}
+                        {msg.isModel ? "Epic" : "You"}
                       </span>
                       <div className={cn(
                         "px-4 py-3 rounded-2xl text-sm leading-relaxed",

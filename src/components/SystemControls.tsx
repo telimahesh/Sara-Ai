@@ -29,10 +29,21 @@ import {
   Layers,
   Accessibility,
   Keyboard,
-  Battery
+  Battery,
+  ChevronRight,
+  ShieldAlert
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "./ui/button";
 
 interface PermissionItemProps {
   icon: React.ElementType;
@@ -81,6 +92,8 @@ const PermissionItem: React.FC<PermissionItemProps> = ({ icon: Icon, title, desc
 
 export const SystemControls = () => {
   const [activeCategory, setActiveCategory] = useState<string>("communication");
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
+  const [showDisplayCaptureModal, setShowDisplayCaptureModal] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, any>>({
     microphone: "prompt",
     camera: "prompt",
@@ -180,7 +193,7 @@ export const SystemControls = () => {
         try {
           setErrorMessage(null);
           if (window.self !== window.top) {
-            setErrorMessage("The Contact Picker API cannot be used inside an iframe. Please open Sara in a new tab to use this feature.");
+            setErrorMessage("The Contact Picker API cannot be used inside an iframe. Please open Epic Assistant in a new tab to use this feature.");
             return;
           }
           const props = ["name", "email", "tel"];
@@ -196,7 +209,25 @@ export const SystemControls = () => {
           }
         }
         break;
+      case "accessibility":
+        setShowAccessibilityModal(true);
+        break;
+      case "display_capture":
+        setShowDisplayCaptureModal(true);
+        break;
     }
+  };
+
+  const handleGrantDisplayCapture = () => {
+    setShowDisplayCaptureModal(false);
+    setErrorMessage("Please click the Screen Share icon (next to settings) on the main dashboard to establish a visual connection.");
+  };
+
+  const handleGrantAccessibility = () => {
+    setShowAccessibilityModal(false);
+    // On Android, we try to open the accessibility settings
+    setErrorMessage("Opening Accessibility Settings... Please look for 'Epic Assistant' in the list and enable it.");
+    window.location.href = "intent:#Intent;action=android.settings.ACCESSIBILITY_SETTINGS;end";
   };
 
   const categories = [
@@ -234,9 +265,10 @@ export const SystemControls = () => {
       { icon: Lock, title: "WAKE_LOCK", desc: "Keep the screen active.", status: permissions.wakelock === "allowed" ? "allowed" : "prompt" },
       { icon: Bell, title: "POST_NOTIFICATIONS", desc: "Display alerts and notifications.", status: permissions.notifications === "granted" ? "allowed" : "prompt" },
       { icon: Smartphone, title: "SYSTEM_ALERT_WINDOW", desc: "Draw over other applications.", status: "restricted" },
+      { icon: Monitor, title: "DISPLAY_CAPTURE", desc: "Allow Epic Assistant to see your screen for deep control and context.", status: "prompt" },
       { icon: Activity, title: "PACKAGE_USAGE_STATS", desc: "Monitor app usage and statistics.", status: "restricted" },
       { icon: Bell, title: "BIND_NOTIFICATION_LISTENER", desc: "Listen to all system notifications.", status: "restricted" },
-      { icon: Accessibility, title: "BIND_ACCESSIBILITY_SERVICE", desc: "Assistive technology access.", status: "restricted" },
+      { icon: Accessibility, title: "BIND_ACCESSIBILITY_SERVICE", desc: "Unlock deep device control, app interaction, and hands-free automation.", status: "prompt" },
       { icon: Keyboard, title: "BIND_INPUT_METHOD", desc: "Custom keyboard integration.", status: "restricted" },
       { icon: Battery, title: "IGNORE_BATTERY_OPTIMIZATIONS", desc: "Bypass power saving restrictions.", status: "restricted" },
       { icon: ShieldCheck, title: "DEVICE_ADMIN", desc: "Device administration privileges.", status: "restricted" },
@@ -264,7 +296,7 @@ export const SystemControls = () => {
       <div className="flex items-center gap-3 mb-4">
         <ShieldCheck className="w-6 h-6 text-pink-500" />
         <div>
-          <h3 className="text-lg font-bold uppercase italic tracking-tight">Sara's Mobile Control</h3>
+          <h3 className="text-lg font-bold uppercase italic tracking-tight">Epic Assistant Control</h3>
           <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Advanced Permission Matrix</p>
         </div>
       </div>
@@ -311,12 +343,140 @@ export const SystemControls = () => {
                   if (perm.title === "WAKE_LOCK") requestPermission("wakelock");
                   if (perm.title === "READ_CONTACTS") requestPermission("contacts");
                   if (perm.title === "VIBRATE") requestPermission("vibration");
+                  if (perm.title === "BIND_ACCESSIBILITY_SERVICE") requestPermission("accessibility");
+                  if (perm.title === "DISPLAY_CAPTURE") requestPermission("display_capture");
                 }}
               />
             ))}
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Accessibility Dialog */}
+      <Dialog open={showAccessibilityModal} onOpenChange={setShowAccessibilityModal}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-[90vw] md:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="w-12 h-12 bg-pink-500/10 rounded-full flex items-center justify-center border border-pink-500/20 mb-4 mx-auto">
+              <Accessibility className="w-6 h-6 text-pink-500" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-center uppercase italic">Grant Accessibility Control?</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm text-center">
+              Epic Assistant requires Accessibility permission to provide a seamless hands-free experience.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 my-6">
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <Smartphone className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">Open Applications</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">Launch any app instantly with just your voice.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <MessageSquare className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">Send Messages</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">Dictate and send messages across WhatsApp, Instagram, and more.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <Bell className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">Handle Notifications</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">Announce incoming alerts and handle automated replies.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <Activity className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">System Interaction</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">Overall device interaction under your guidance.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-xl flex items-start gap-3 mb-6">
+            <ShieldAlert className="w-4 h-4 text-pink-400 shrink-0 mt-0.5" />
+            <p className="text-[9px] text-pink-200 uppercase tracking-wider leading-relaxed">
+              This permission is powerful. We only use it to perform the actions you explicitly request. Your privacy is our priority.
+            </p>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              onClick={() => setShowAccessibilityModal(false)}
+              variant="ghost"
+              className="flex-1 text-zinc-500 hover:text-white"
+            >
+              Maybe Later
+            </Button>
+            <Button 
+              onClick={handleGrantAccessibility}
+              className="flex-1 bg-pink-600 hover:bg-pink-500 text-white font-bold uppercase tracking-widest text-[10px] py-6"
+            >
+              Grant Permission
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* Display Capture Dialog */}
+      <Dialog open={showDisplayCaptureModal} onOpenChange={setShowDisplayCaptureModal}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white max-w-[90vw] md:max-w-md rounded-2xl">
+          <DialogHeader>
+            <div className="w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center border border-cyan-500/20 mb-4 mx-auto">
+              <Monitor className="w-6 h-6 text-cyan-500" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-center uppercase italic">Enable Screen Awareness?</DialogTitle>
+            <DialogDescription className="text-zinc-400 text-sm text-center">
+              Display Capture allows Epic Assistant to see your screen to provide smarter, context-aware help and deep device control.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 my-6">
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <Eye className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">Visual Context</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">The AI can 'see' what you're looking at to help with complex tasks.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+              <Layers className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+              <div>
+                <h6 className="text-[10px] font-bold text-white uppercase tracking-wider mb-1">App Interaction</h6>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-tight">Enables clicking and scrolling inside apps via voice commands.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl flex items-start gap-3 mb-6">
+            <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+            <p className="text-[9px] text-cyan-200 uppercase tracking-wider leading-relaxed">
+              Screen recording only starts when you activate the visual mode. You can stop it at any time. No data is stored permanently.
+            </p>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button 
+              onClick={() => setShowDisplayCaptureModal(false)}
+              variant="ghost"
+              className="flex-1 text-zinc-500 hover:text-white"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleGrantDisplayCapture}
+              className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold uppercase tracking-widest text-[10px] py-6"
+            >
+              I Understand
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {errorMessage && (
         <motion.div 
@@ -335,7 +495,7 @@ export const SystemControls = () => {
           <div>
             <h5 className="text-[10px] font-bold text-pink-200 mb-1 uppercase tracking-widest">Native Integration Note</h5>
             <p className="text-[9px] text-zinc-400 leading-relaxed uppercase tracking-wider">
-              Permissions marked as <span className="text-orange-400">RESTRICTED</span> are enforced by Android system policies. Full control over SMS, Call Logs, and System Services requires Sara to be installed as a native mobile application.
+              Permissions marked as <span className="text-orange-400">RESTRICTED</span> are enforced by Android system policies. Full control over SMS, Call Logs, and System Services requires Epic Assistant to be installed as a native mobile application.
             </p>
           </div>
         </div>

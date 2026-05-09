@@ -1,6 +1,6 @@
 {
-  "name": "Sara AI Assistant",
-  "description": "Your sassy, witty, and flirty AI companion for voice conversations and memories.",
+  "name": "Epic Assistant",
+  "description": "Your powerful AI companion for deep device control and voice conversations.",
   "requestFramePermissions": [
     "microphone",
     "camera",
