@@ -37,28 +37,12 @@ jobs:
       - name: Fix Gradle Wrapper
         run: |
           cd android
-          rm -f gradle/wrapper/gradle-wrapper.jar
-          rm -f gradle/wrapper/gradle-wrapper.properties
-          # Create properties first
-          mkdir -p gradle/wrapper
-          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip
-          networkTimeout=10000
-          validateDistributionUrl=true
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          # Use gradle wrapper if possible to generate the jar, or just use a placeholder jar if needed
-          # Actually, the best way is to let 'gradle wrapper' do it if gradle is installed
-          gradle wrapper --gradle-version 8.7
+          # Ensure gradlew is executable
           chmod +x gradlew
-          # Final check
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Gradle wrapper jar missing, downloading manually..."
-            wget -q https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar -O gradle/wrapper/gradle-wrapper.jar
-          fi
+          # If the wrapper jar is missing or likely corrupt, we can force regenerate it
+          # or just ensure the properties file is correct.
+          # We'll use the 'gradle wrapper' command which is available on the runner.
+          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
 
       - name: Build Android APK
         run: |
